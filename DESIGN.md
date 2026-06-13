@@ -1,316 +1,272 @@
-# AI Multimodal Chat Application — Design Document
+# AI 多模态语音助手 — 设计文档
 
-**Target market**: Mainland China  
-**Date**: 2026-06-13  
-**Status**: Planning / Pre-implementation
-
----
-
-## 1. Overview
-
-A real-time AI chat application that sees through the device camera, hears the user's voice, and responds in natural spoken Chinese. Designed for mainland China — all services must be accessible without VPN, meaning no Google, OpenAI, or other globally-blocked providers.
-
-The core challenge is balancing three tensions simultaneously:
-- **Fluency vs latency**: voice must feel like a conversation, not a walkie-talkie
-- **Visual accuracy vs cost**: vision API calls are expensive; sending every frame is not viable
-- **Edge vs cloud**: on-device is free and private; cloud is more capable but has per-call cost and network latency
+**目标市场**：中国大陆  
+**完成日期**：2026-06-14  
+**状态**：v1.0 已上线
 
 ---
 
-## 2. User Stories
+## 一、概述
 
-### US-01 · Natural Voice Conversation
-> As a Chinese-speaking user, I want to speak naturally (including mixed Mandarin/dialects/English code-switching) and receive a spoken response within 1–2 seconds of finishing my sentence, so that the interaction feels like a real conversation rather than a query-response system.
+本应用是一款实时 AI 对话助手，能够通过设备摄像头"看见"用户周围的环境，聆听用户说话，并以自然的中文语音进行回应。核心约束是所有依赖的服务必须在中国大陆可直接访问，无需 VPN。
 
-**Acceptance criteria**:
-- STT handles accented Mandarin and common Mandarin/English code-switching
-- First audio byte of TTS response begins playing ≤ 1.5 s after end-of-speech is detected
-- The AI does not interrupt itself if the user starts speaking mid-response (barge-in support)
+设计过程中需同时解决三组张力：
 
----
-
-### US-02 · Camera-Grounded Q&A
-> As a user, I want to point my camera at anything — a product label, a document, an unfamiliar plant, a math problem — and ask a natural language question about it, so I can get contextual help without typing or describing the scene.
-
-**Acceptance criteria**:
-- User does not need to say "look at this" — the system passively maintains visual context
-- Visual queries ("这是什么？", "上面写的什么？", "怎么算？") are answered using the current camera frame
-- OCR accuracy on printed Chinese text ≥ 90% under normal lighting
+- **流畅性 vs. 延迟**：语音对话必须像真实交流，而非"按发送键"的问答模式
+- **视觉准确性 vs. 成本**：视觉 API 调用昂贵，不能无差别发送每一帧
+- **边缘计算 vs. 云端**：本地处理免费且保护隐私，云端更强大但有延迟和计费
 
 ---
 
-### US-03 · Hands-Free / Wake-Word Activation
-> As a user, I want to say a wake word ("你好，小智") so the assistant activates without me needing to tap the screen, enabling truly hands-free use while cooking, driving, or working.
+## 二、用户故事
 
-**Acceptance criteria**:
-- Wake word detection runs entirely on-device with < 5% false-positive rate
-- Microphone is not streamed to cloud before wake word is confirmed
-- Battery drain from always-listening mode is acceptable (< 3% per hour on mid-range phone)
+### 计划实现的用户故事
 
----
+#### US-01 · 自然语音对话
+> 作为中文用户，我希望自然地说话（含普通话、英中混合），并在说完后 1–2 秒内听到语音回答，让交互感觉像真实对话，而非查询-响应系统。
 
-### US-04 · Proactive Visual Awareness
-> As a user, I want the AI to occasionally notice and comment on important things in the camera view that I haven't asked about (e.g., "我注意到这份合同里有一条不寻常的条款"), so the assistant feels genuinely attentive rather than purely reactive.
-
-**Acceptance criteria**:
-- Proactive comments are triggered at most once every 30 seconds to avoid being intrusive
-- Triggered only when scene content changes significantly (scene-change threshold)
-- User can disable proactive mode in settings
+**验收标准**：
+- STT 支持带口音的普通话及中英混合
+- 说话结束后，TTS 第一个音频字节在 ≤1.5 秒内开始播放
+- 支持打断（barge-in）：用户说话时 AI 停止播报
 
 ---
 
-### US-05 · Multimodal Context Fusion
-> As a user, I want the AI to automatically combine what I say with what it sees — without me having to describe my surroundings — so answers are grounded in my actual context.
+#### US-02 · 摄像头辅助问答
+> 作为用户，我希望把摄像头对准任何物体（产品标签、文件、植物、数学题），直接开口提问，而无需手动描述画面。
 
-**Acceptance criteria**:
-- Every cloud LLM call includes the most recent camera frame when the query is classified as visual
-- The model's response references specific visual details when relevant
-- Purely conversational queries (greetings, abstract questions) do NOT send camera frames, saving cost
-
----
-
-### US-06 · Low-Cost Sustained Use
-> As a user, I want to run the assistant for 30+ minutes without it becoming prohibitively expensive for the developer, so the service remains available and affordable.
-
-**Acceptance criteria**:
-- Vision API is not called more than ~10× per minute under normal use
-- STT is only billed for actual speech segments (silence is filtered at edge)
-- A 30-minute session costs less than ¥1 RMB in API fees under typical usage patterns
+**验收标准**：
+- 无需说"看这里"，系统被动维护视觉上下文
+- 视觉类提问（"这是什么？"、"上面写的什么？"、"怎么算？"）使用当前摄像头画面进行回答
+- 印刷体中文 OCR 准确率在正常光线下 ≥90%
 
 ---
 
-## 3. System Architecture
+#### US-03 · 唤醒词免触发（计划中）
+> 作为用户，我希望说出唤醒词（如"你好，小智"）来激活助手，实现烹饪、驾驶或工作时的真正免手操作。
+
+**验收标准**：
+- 唤醒词检测完全在设备本地运行，误触发率 <5%
+- 唤醒词确认前，麦克风不向云端传输
+- 常驻监听模式的电量消耗可接受（中端手机 <3%/小时）
+
+---
+
+#### US-04 · 主动视觉感知（计划中）
+> 作为用户，我希望 AI 偶尔主动注意到画面中的重要内容并发出提示（如"我注意到这份合同有一条不寻常的条款"），让助手感觉真正专注而非纯被动。
+
+**验收标准**：
+- 主动提示最多每 30 秒触发一次，避免打扰
+- 仅在场景内容发生显著变化时触发
+- 用户可在设置中关闭主动模式
+
+---
+
+#### US-05 · 多模态上下文融合
+> 作为用户，我希望 AI 自动结合我说的话与它看到的画面，无需我描述周围环境，使回答扎根于真实情境。
+
+**验收标准**：
+- 每次 LLM 调用均附带最新摄像头帧
+- 模型回答在相关时引用具体视觉细节
+- 纯对话类提问（问候、抽象问题）不发送摄像头帧，节省成本
+
+---
+
+#### US-06 · 低成本持续使用
+> 作为用户，我希望连续使用 30 分钟以上而不造成过高的 API 成本，使服务保持可用和可负担。
+
+**验收标准**：
+- 正常使用下视觉 API 调用不超过约 10 次/分钟
+- STT 仅对实际语音片段计费，静音在边缘过滤
+- 典型使用模式下 30 分钟会话 API 费用低于 ¥1
+
+---
+
+### 实际实现情况
+
+| 编号 | 故事 | 状态 | 说明 |
+|------|------|------|------|
+| US-01 | 自然语音对话 | ✅ 已实现 | 讯飞 IAT 实时 ASR；讯飞 TTS 分句流式播放；支持 barge-in |
+| US-02 | 摄像头辅助问答 | ✅ 已实现 | 每次 AI 请求均附带最新摄像头帧；1fps 采集，768px 压缩 |
+| US-03 | 唤醒词 | ❌ 未实现 | 需原生 SDK 集成，推迟至 v1.1 |
+| US-04 | 主动视觉感知 | ❌ 未实现 | 需场景变化检测与定时触发，推迟至 v1.2 |
+| US-05 | 多模态上下文融合 | ✅ 已实现 | 每轮对话固定附带最新帧；保留最近 5 轮历史 |
+| US-06 | 低成本持续使用 | 🔶 部分实现 | VAD、1fps、768px 压缩已实现；分级模型路由未实现 |
+
+**Web 端补充**：浏览器 VAD 在部分场景下不可靠，新增"按钮对讲"（PTT）模式作为稳定替代。
+
+---
+
+## 三、系统架构
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                       CLIENT DEVICE (Mobile / Web)                   │
-│                                                                      │
-│  Microphone ──► [VAD] ──► [Audio Buffer]                            │
-│                                 │ speech only                        │
-│  Camera ──► [Frame Sampler] ──► [Scene-Change Detector]             │
-│                    1 fps                  │ changed frames only      │
-│                                           │                          │
-│             [Wake Word Detector (on-device)]                         │
-│                    │ activated only after wake word                  │
-│                    ▼                                                  │
-│             WebSocket / HTTPS stream ────────────────────────────┐   │
-└──────────────────────────────────────────────────────────────────┼───┘
-                                                                   │
-┌──────────────────────────────────────────────────────────────────▼───┐
-│                           BACKEND SERVER                              │
-│                   (Alibaba Cloud / Tencent Cloud, China region)       │
-│                                                                       │
-│  ┌──────────────────┐    ┌─────────────────────────────────────────┐ │
-│  │  Session Manager  │    │          Orchestration Layer            │ │
-│  │  - Conversation   │    │  1. Receive audio chunk                 │ │
-│  │    history (5 turns)   │  2. Stream to STT → get transcript      │ │
-│  │  - Last frame     │◄──►│  3. Classify: text-only vs visual?      │ │
-│  │  - User prefs     │    │  4. Build LLM prompt (text [+ frame])   │ │
-│  └──────────────────┘    │  5. Stream LLM response                  │ │
-│                           │  6. Stream TTS → send audio to client   │ │
-│                           └─────────────────────────────────────────┘ │
-│                                     │                                  │
-│     ┌───────────────┬───────────────┼───────────────┐                 │
-│     ▼               ▼               ▼               ▼                 │
-│  [iFlytek STT]  [Qwen-VL-Plus]  [iFlytek TTS]  [Query Classifier]    │
-│  Real-time ASR  Multimodal LLM   Streaming TTS   (rule + small LLM)  │
-└───────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────┐
+│       客户端（Flutter / Chrome）      │
+│                                      │
+│  麦克风 ──► [VAD / PTT] ──► [PCM 流] │
+│                                      │
+│  摄像头 ──► [1fps 采集] ──► [JPEG压缩]│
+│                                      │
+│  ──── WebSocket ────────────────────►│
+└──────────────────────────────────────┘
+                │
+┌───────────────▼──────────────────────┐
+│        后端（FastAPI + uvicorn）       │
+│                                      │
+│  end_of_speech                        │
+│   ──► 讯飞 IAT ASR ──► 转录文本        │
+│   ──► Qwen-VL（附最新帧）──► 流式文本  │
+│   ──► 讯飞 TTS ──► 分句 MP3           │
+│   ──► 推送至客户端播放                 │
+└──────────────────────────────────────┘
 ```
 
-### Data flow (single turn)
+### 技术栈
 
-1. User speaks → Edge VAD detects speech start, begins buffering audio
-2. Edge streams audio chunks over WebSocket to backend
-3. Backend pipes audio to **iFlytek Real-Time ASR** (streaming); partial transcripts arrive every ~200 ms
-4. Edge VAD detects end-of-speech → sends end-of-utterance signal
-5. Final transcript locked; backend runs **Query Classifier** (visual or text-only?)
-6. If **visual**: backend fetches latest camera frame sent by edge; includes it in LLM call
-7. Backend calls **Qwen-VL-Plus** with [system context, conversation history (last 5 turns), transcript, optional frame]
-8. LLM response streams back; backend pipes text chunks to **iFlytek TTS** in real time
-9. TTS audio streams back to client and plays immediately (progressive playback)
-10. Full response appended to session history
+| 层级 | 选择 | 理由 |
+|------|------|------|
+| STT | 讯飞实时语音转写（IAT） | 中文准确率最优；流式 WebSocket；支持多方言 |
+| 多模态 LLM | 阿里云百炼 qwen-vl-plus（OpenAI 兼容模式） | 视觉+中文能力强；大陆直连；价格适中 |
+| TTS | 讯飞语音合成 | 中文语音最自然；MP3 直接推送客户端 |
+| 后端 | Python / FastAPI / asyncio | WebSocket 异步处理；与各 SDK 兼容性好 |
+| 客户端 | Flutter（Web / Android / iOS） | 单代码库多平台；摄像头与麦克风 API 完善 |
 
 ---
 
-## 4. Technology Stack (Mainland China)
+## 四、运营成本控制
 
-| Layer | Chosen Provider | Reason |
-|---|---|---|
-| STT | **iFlytek Spark ASR** (讯飞实时语音转写) | Best Chinese ASR accuracy, streaming API, dialect support |
-| Multimodal LLM | **Qwen-VL-Plus** (Alibaba Cloud) | Strong vision + Chinese language, accessible in China, cost-effective vs Qwen-VL-Max |
-| TTS | **iFlytek TTS** (讯飞语音合成) | Most natural Chinese TTS on market; SSML support for prosody control |
-| Backend runtime | **Python / FastAPI** | Async WebSocket handling; good SDK support for all above providers |
-| Deployment | **Alibaba Cloud ECS** (华东 / 华北) | Co-located with Qwen APIs → lowest latency; ICP-compliant |
-| Wake word | **Picovoice Porcupine** or **Snowboy** (on-device) | Runs fully on-device; no network call |
-| Edge VAD | **WebRTC VAD** (py-webrtcvad / browser MediaRecorder VAD) | Proven, lightweight |
-| Mobile client | **Flutter** | Single codebase iOS + Android; good camera + mic APIs |
+### 4A · 所有设想过的技巧
 
-### Fallback / alternatives considered
+#### 边缘端策略
 
-- **GLM-4V** (Zhipu AI): strong competitor to Qwen-VL; can use as failover
-- **Baidu ERNIE Bot**: broader ecosystem but weaker vision accuracy benchmarks
-- **Azure China (21Vianet)**: GPT-4o accessible via Azure China endpoint, but pricing less predictable and still US-origin model with compliance questions for some enterprise users
-- **MiniCPM-V** (on-device): open-source multimodal model that can run on high-end phones — worth evaluating for future offline mode
+| 编号 | 策略 | 预估节省 | 实现难度 |
+|------|------|----------|----------|
+| E1 | **VAD 静音过滤** — 仅在检测到语音时流式传输，静音丢弃 | STT 成本降低 40–70% | 低 |
+| E2 | **唤醒词门控** — 唤醒词确认前麦克风不上传云端 | 闲置期 STT 近零成本 | 中 |
+| E3 | **固定低帧率采集** — 摄像头以 1fps 采集，非 30fps | 视觉 API 调用降低 ~97% | 低 |
+| E4 | **场景变化检测** — 帧间感知哈希比对，未变化不上传 | 静止场景再降 30–50% | 中 |
+| E5 | **图像压缩上传** — 上传前缩放至最长边 768px，JPEG Q=80 | 带宽降低 70%；视觉 token 数减少 | 低 |
+| E6 | **端侧轻量视觉预筛** — 用 MobileNet 判断帧是否有信息量，空帧不发 | 避免为黑帧/模糊帧付费 | 高 |
+| E7 | **Barge-in 打断** — 用户说话时立即中止 TTS 生成 | 减少无用 TTS token | 中 |
 
----
+#### 云端策略
 
-## 5. Cost Control — Strategies
-
-### 5A. All strategies considered (including unimplemented)
-
-#### Edge-side strategies
-
-| ID | Strategy | Estimated Saving | Complexity |
-|---|---|---|---|
-| E1 | **Voice Activity Detection (VAD)** — only stream audio during detected speech; silence is discarded at edge | 40–70% of STT cost | Low |
-| E2 | **Wake-word gate** — microphone not streamed at all until wake word confirmed on-device | Near-zero STT cost during idle | Medium |
-| E3 | **Adaptive frame rate** — camera captured at 1 fps baseline; drops to 0.2 fps when scene is static | 50–80% of vision API calls | Low–Medium |
-| E4 | **Scene-change detection** — pixel-diff hash between frames; skip upload if Δ < threshold | Additional 30–50% reduction on top of E3 | Medium |
-| E5 | **Image downscale before upload** — resize to 768px max side, JPEG Q=75 before sending | Reduces upload bandwidth 70%; smaller token count in vision API | Low |
-| E6 | **On-device lightweight vision pre-filter** — use MobileNet/YOLO-Nano to detect if frame contains "interesting" content (face, text, objects) before paying for cloud vision | Avoid cloud vision for empty/dark/blurry frames | High |
-| E7 | **Barge-in / interruption detection** — detect user speaking over TTS response; abort current TTS stream and STT re-activates | Avoids wasted TTS synthesis | Medium |
-
-#### Cloud-side strategies
-
-| ID | Strategy | Estimated Saving | Complexity |
-|---|---|---|---|
-| C1 | **Query classifier — text vs visual** — classify whether query requires camera context; only include image tokens when needed | 30–60% of vision token cost | Low |
-| C2 | **Context window pruning** — keep only last 5 conversation turns + system prompt; drop older turns | Prevents linear cost growth per session | Low |
-| C3 | **Tiered model selection** — route simple/factual queries to cheaper text-only model (e.g., Qwen-Turbo); reserve VL model for visual queries | 40–60% overall LLM cost | Medium |
-| C4 | **TTS response caching** — cache audio for frequently repeated short responses ("好的", "请稍等", "我不太明白") | 5–15% of TTS cost | Low |
-| C5 | **Streaming TTS with early termination** — if user barges in, stop TTS generation immediately | Saves cost on unused tokens | Medium |
-| C6 | **Conversation summarization** — after 10+ turns, summarize history into a compact context block rather than keeping raw turns | Reduces input token count for long sessions | Medium |
-| C7 | **Image caching by perceptual hash** — if the same frame hash has been sent within last 10 s, reuse the last LLM visual analysis | Near-zero cost for static scenes with repeated queries | Medium |
+| 编号 | 策略 | 预估节省 | 实现难度 |
+|------|------|----------|----------|
+| C1 | **查询分类：文本 vs. 视觉** — 非视觉问题不附带图像 | 视觉 token 成本降低 30–60% | 低 |
+| C2 | **上下文窗口裁剪** — 仅保留最近 5 轮历史 | 防止长会话线性增费 | 低 |
+| C3 | **分级模型路由** — 纯文本路由至 qwen-turbo，视觉才用 VL 模型 | LLM 成本降低 40–60% | 中 |
+| C4 | **TTS 常用语缓存** — 预合成"好的"、"稍等"等约 20 句，复用 MP3 | TTS 成本降低 5–15% | 低 |
+| C5 | **TTS 流式早终止** — 用户打断时立即停止 TTS 合成 | 减少未播放的合成费用 | 中 |
+| C6 | **对话摘要压缩** — 10 轮以上后将历史压缩为摘要块 | 长会话 input token 大幅减少 | 中 |
+| C7 | **图像感知哈希缓存** — 10 秒内相同帧哈希复用上次分析结果 | 静止场景重复提问近零视觉成本 | 中 |
 
 ---
 
-### 5B. What is actually implemented (MVP scope)
+### 4B · 实际采用情况
 
-The following are confirmed for the initial build:
+| 编号 | 策略 | 状态 | 备注 |
+|------|------|------|------|
+| E1 | VAD 静音过滤 | ✅ 已采用 | 基于 RMS 幅度；-35dB 阈值；5 帧连续触发 |
+| E3 | 固定 1fps 采集 | ✅ 已采用 | 定时器每秒抓一帧 |
+| E5 | 图像压缩上传 | ✅ 已采用 | 最长边 ≤768px；JPEG Q=80 |
+| E7 | Barge-in 打断 | ✅ 已采用 | 客户端 VAD 检测语音即发 `barge_in`；服务端取消当前任务 |
+| C2 | 上下文窗口裁剪 | ✅ 已采用 | 固定保留最近 5 轮 |
+| C1 | 查询分类 | ❌ 已移除 | 初版采用关键词分类；后改为每轮固定附带最新帧以提升准确性，分类器随之废弃 |
+| C4 | TTS 常用语缓存 | ❌ 已移除 | 初版实现；后因维护成本高于收益而移除 |
 
-| ID | Strategy | Implementation Notes |
-|---|---|---|
-| **E1** | VAD at edge | WebRTC VAD in browser / Flutter plugin; 200 ms windows; speech threshold tunable |
-| **E3** | Fixed 1 fps frame capture | Camera captures at 1 fps; no adaptive rate yet |
-| **E5** | Image downscale before upload | Resize to max 768px on longest side, JPEG Q=80, before WebSocket send |
-| **C1** | Query classifier (rule-based) | Keyword matching for visual intent words ("看看", "这是", "上面写", "识别", "扫一下"); non-matching queries skip the image |
-| **C2** | Context window pruning | Always send only last 5 turns to LLM |
-| **C4** | TTS caching (partial) | Pre-synthesized MP3s for ~20 common filler phrases stored server-side |
+#### 未采用的策略及原因
 
-The following are **designed but deferred** to a later iteration:
-
-| ID | Strategy | Reason Deferred |
-|---|---|---|
-| E2 | Wake-word gate | Requires native SDK integration; added in v1.1 |
-| E4 | Scene-change detection | Needs perceptual hash library + tuning; v1.1 |
-| E6 | On-device vision pre-filter | Requires on-device model deployment pipeline; v2.0 |
-| C3 | Tiered model selection | Needs query complexity scoring; v1.1 |
-| C5 | Streaming TTS early termination | Depends on barge-in detection (E7); v1.1 |
-| C6 | Conversation summarization | Low priority for short sessions; v1.2 |
-| C7 | Image caching by perceptual hash | Nice-to-have; v1.1 |
+| 编号 | 策略 | 原因 |
+|------|------|------|
+| E2 | 唤醒词门控 | 需集成原生 SDK；推迟至 v1.1 |
+| E4 | 场景变化检测 | 需感知哈希库与阈值调优；推迟至 v1.1 |
+| E6 | 端侧视觉预筛 | 需端侧模型部署流程；推迟至 v2.0 |
+| C3 | 分级模型路由 | 需问题复杂度打分；推迟至 v1.1 |
+| C5 | TTS 流式早终止 | 与 barge-in 协同尚未完善；v1.1 |
+| C6 | 对话摘要压缩 | 短会话优先级低；v1.2 |
+| C7 | 图像感知哈希缓存 | 当前固定附帧策略下收益待评估；v1.1 |
 
 ---
 
-## 6. Voice Fluency Design
+## 五、语音流畅性设计
 
-The hardest UX problem is making voice feel continuous, not chunky. Key design decisions:
+### 5.1 流式管线（核心）
 
-### 6.1 Streaming pipeline (critical)
-All three stages stream in parallel — STT output feeds LLM input before the sentence is complete, and LLM output feeds TTS before the paragraph is complete. This is the primary lever for latency.
+三个阶段并行流式处理——STT 输出直接喂给 LLM，LLM 输出逐句喂给 TTS，TTS 边合成边播放：
 
 ```
-Audio in  ──► STT stream ──► [partial transcript] ──►
-                                                      LLM stream ──► [partial response] ──►
-                                                                                           TTS stream ──► Audio out
+音频输入 ──► STT 流 ──► 转录文本 ──► LLM 流 ──► 逐句文本 ──► TTS 流 ──► 音频输出
 ```
 
-Target: first audio playback begins ≤ 1.5 s from end-of-speech detection.
+目标：说话结束后，第一帧音频在 ≤1.5 秒内开始播放。
 
-### 6.2 Sentence-boundary chunking for TTS
-Do not wait for the full LLM response. Split at natural sentence boundaries (。！？…) and synthesize each chunk independently. Play chunk N while synthesizing chunk N+1.
+### 5.2 分句 TTS 合成
 
-### 6.3 Filler audio
-If LLM latency causes a gap > 800 ms before first sentence, insert a natural filler ("嗯…", "让我想想…") to prevent silence that feels like a system error.
+不等 LLM 全部输出完再合成。在中文句末标点（。！？…）处分割，每句独立提交 TTS，第 N 句播放时同步合成第 N+1 句。
 
-### 6.4 Prosody via SSML
-Use iFlytek's SSML support to control:
-- Speaking rate (default 1.0×, slow down for reading long text, speed up for short confirmations)
-- Pause insertion between logical paragraphs
-- Emphasis on key terms
+### 5.3 打断（Barge-in）
 
-### 6.5 Barge-in
-When the user speaks while TTS is playing:
-1. Client detects speech via VAD
-2. Client immediately sends `barge-in` event over WebSocket
-3. Server aborts TTS stream and LLM generation
-4. System re-enters listening mode within < 200 ms
+1. 客户端 VAD 检测到用户说话
+2. 立即通过 WebSocket 发送 `barge_in` 消息
+3. 服务端取消当前 LLM 任务并中止 TTS 分发
+4. 200ms 内重新进入监听模式
 
 ---
 
-## 7. Visual Accuracy Design
+## 六、WebSocket 消息协议
 
-### 7.1 Frame quality budget
-- Minimum 480p capture; 720p preferred
-- Avoid heavy compression artifacts: JPEG Q < 70 is too lossy for text recognition
-- Stabilize capture: request camera auto-focus lock when user is holding phone steady
-
-### 7.2 When to send a frame
-The query classifier uses two signals:
-1. **Lexical trigger**: query contains visual-intent vocabulary
-2. **Implicit visual context**: if conversation history shows the user has been asking about their environment, default to including the frame
-
-### 7.3 Multi-frame context (future, v1.2)
-For dynamic scenes (user walking through a store, etc.), send 3 frames at 2-second intervals instead of 1, letting the LLM reason about motion and change.
-
-### 7.4 Prompt engineering for vision
-System prompt instructs Qwen-VL to:
-- Prioritize text/characters visible in the image over hallucinated content
-- Express uncertainty explicitly ("图片中文字不清晰，我尝试读取为…") rather than confabulating
-- Output structured information (ingredient lists, formulas) when recognizing structured content
+| 方向 | 消息类型 | 内容 |
+|------|----------|------|
+| 客户端 → 服务端 | `audio_chunk` | Base64 编码的 PCM 16-bit / 16kHz / 单声道 |
+| 客户端 → 服务端 | `camera_frame` | Base64 编码的 JPEG（≤768px） |
+| 客户端 → 服务端 | `end_of_speech` | 说话结束信号，触发 ASR→LLM→TTS 管线 |
+| 客户端 → 服务端 | `barge_in` | 用户打断信号，终止当前回答 |
+| 服务端 → 客户端 | `transcript` | ASR 识别结果文本 |
+| 服务端 → 客户端 | `ai_text` | LLM 流式文本片段 |
+| 服务端 → 客户端 | `tts_audio` | Base64 编码的 MP3 片段 |
+| 服务端 → 客户端 | `response_done` | 本轮回答完成 |
+| 服务端 → 客户端 | `error` | 错误信息 |
 
 ---
 
-## 8. China Compliance Notes
+## 七、大陆合规说明
 
-- All cloud infrastructure hosted in **mainland China regions** (not Hong Kong)
-- App must obtain **ICP 备案** before public release
-- Voice data storage must comply with **《个人信息保护法》(PIPL)**; do not retain raw audio beyond session duration without explicit user consent
-- Camera frames are processed in memory only; not persisted to cloud storage
-- Privacy policy must be displayed in-app before first use
-- Real-name verification (实名认证) may be required depending on app classification (IM / AI services)
+- 所有云服务部署于**中国大陆区域**，无需 VPN 直连
+- 公开发布前需完成 **ICP 备案**
+- 语音数据遵循**《个人信息保护法》（PIPL）**，会话结束后不保留原始音频
+- 摄像头帧仅在内存中处理，不持久化至云存储
+- 正式上线前需在应用内展示隐私政策
 
 ---
 
-## 9. Implementation Roadmap
+## 八、版本路线图
 
-### v1.0 — MVP
-- [x] Flutter client: microphone + camera capture
-- [x] Edge VAD (WebRTC VAD)
-- [x] 1 fps fixed frame capture + 768px downscale
-- [x] FastAPI backend with WebSocket session handling
-- [x] iFlytek Real-Time ASR integration (streaming)
-- [x] Rule-based query classifier (text vs visual)
-- [x] Qwen-VL-Plus integration with 5-turn context window
-- [x] iFlytek TTS with sentence-boundary chunking
-- [x] Pre-synthesized filler audio
-- [x] Common-phrase TTS cache (~20 phrases)
+### v1.0（已完成）
+- [x] Flutter 客户端：麦克风 + 摄像头采集（支持 Web / 原生双端）
+- [x] 边缘 VAD（幅度检测）+ PTT 备用模式（Web）
+- [x] 1fps 固定帧率采集 + 768px 压缩
+- [x] FastAPI 后端 + WebSocket 会话管理
+- [x] 讯飞 IAT 实时 ASR 集成
+- [x] 阿里云百炼 Qwen-VL-Plus（OpenAI 兼容模式）+ 每轮附带最新帧
+- [x] 5 轮上下文窗口裁剪
+- [x] 讯飞 TTS + 分句流式合成
+- [x] Barge-in 打断支持
 
-### v1.1 — Cost & UX refinement
-- [ ] Scene-change detection (perceptual hash)
-- [ ] Adaptive frame rate (0.2 fps static → 2 fps motion)
-- [ ] Wake-word gate (Picovoice Porcupine)
-- [ ] Tiered model: Qwen-Turbo for text-only, Qwen-VL-Plus for visual
-- [ ] Barge-in support + TTS early termination
-- [ ] Perceptual-hash image cache (10 s window)
+### v1.1（待开发）
+- [ ] 场景变化检测（感知哈希）
+- [ ] 自适应帧率（静止 0.2fps → 运动 2fps）
+- [ ] 唤醒词门控（Picovoice Porcupine）
+- [ ] 分级模型路由（qwen-turbo 文本 / qwen-vl 视觉）
+- [ ] 图像感知哈希缓存（10 秒窗口）
 
-### v1.2 — Intelligence depth
-- [ ] Multi-frame context for dynamic scenes
-- [ ] Conversation summarization after 10 turns
-- [ ] Proactive visual awareness (scene-change triggered, max 1/30 s)
-- [ ] SSML prosody tuning per response type
-- [ ] GLM-4V as failover for Qwen-VL outages
+### v1.2（规划中）
+- [ ] 多帧视觉上下文（动态场景）
+- [ ] 对话摘要压缩（10 轮后）
+- [ ] 主动视觉感知（最多 30 秒一次）
+- [ ] SSML 韵律精调
 
-### v2.0 — On-device intelligence
-- [ ] On-device wake word + on-device lightweight vision (MobileNet pre-filter)
-- [ ] Optional fully offline mode for supported high-end devices (MiniCPM-V)
-- [ ] Streaming latency < 1 s target with edge inference assist
+### v2.0（远期）
+- [ ] 端侧唤醒词 + 轻量视觉预筛（MobileNet）
+- [ ] 可选纯离线模式（MiniCPM-V 高端机型）
+- [ ] 端侧推理辅助，延迟目标 <1 秒
