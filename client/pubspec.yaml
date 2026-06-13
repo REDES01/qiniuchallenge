@@ -1,0 +1,37 @@
+name: qiniuchallenge
+description: AI multimodal chat — voice + camera for mainland China.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Networking
+  web_socket_channel: ^2.4.0
+
+  # Microphone recording (streaming PCM)
+  record: ^5.1.0
+
+  # Camera access
+  camera: ^0.10.5+9
+
+  # Audio playback
+  just_audio: ^0.9.40
+
+  # Image resizing before upload
+  image: ^4.1.7
+
+  # Runtime permissions
+  permission_handler: ^11.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
